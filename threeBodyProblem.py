@@ -4,7 +4,7 @@ import math
 import cv2 as cv
 import numpy as np
 class ThreeBody:
-    def __iter__(self, speed = 0.01, G = 0.005, dt = 0.01, delta_t = 0.05):
+    def __iter__(self, speed = 0.005, G = 0.005, dt = 0.01, delta_t = 0.05):
         self.res = (40,40) 
         self.N = 3
         self.r = [np.random.rand(2) for i in range(self.N)]
@@ -16,29 +16,42 @@ class ThreeBody:
         self.dt = dt
         self.delta_t = delta_t
         self.nt = int(math.floor(self.delta_t/self.dt))
+        self.temp = np.zeros(2)
+        self.acctemp = np.zeros(2)
         return self
     def updatePhysics(self):
         for i in range(self.nt):
             self.step()
     def step(self):
-        constrain = np.vectorize(lambda x: x%1)
 
         a = [np.zeros(2, dtype=float) for i in range(self.N)]
+        temp = self.temp
         for i in range(self.N-1):
             for j in range(i+1, self.N):
-                for x in range(-5, 5):
-                    for y in range(-5, 5):
-                        dis = np.array([x, y]) + self.r[j] - self.r[i]
-                        rad = np.linalg.norm(dis)
-                        if rad < 0.05:
+                for x in range(-1, 2):
+                    for y in range(-1, 2):
+                        temp[0] = x
+                        temp[1] = y
+                        temp += self.r[j]
+                        temp -= self.r[i]
+                        rad = np.linalg.norm(temp)
+                        if rad < 0.1:
                             continue
-                        acc = self.G * self.m[i] * self.m[j] * dis / rad**3
-                        a[i] += acc
-                        a[j] -= acc
+                        temp *= self.G * self.m[i] * self.m[j]  / rad**3
+                        a[i] += temp
+                        a[j] -= temp
+        acctemp = self.acctemp
         for i in range(self.N):
-            self.r[i] += self.v[i] * self.dt + 0.5 * a[i] * self.dt**2
-            self.v[i] += a[i] * self.dt
-            self.r[i] = constrain(self.r[i])
+            temp[:] = self.v[i]
+            temp *= self.dt
+
+            acctemp[:] = a[i]
+            acctemp *= self.dt
+            self.v[i] += acctemp
+            acctemp *= 0.5 * self.dt
+            self.r[i] += temp
+            self.r[i] += acctemp
+            self.r[i] %= 1
     def plot(self, im, pos, col):
         coor = pos * np.array(self.res)
         ic = np.floor(coor)
@@ -80,7 +93,7 @@ class ThreeBody:
         return self.genImage()
 if __name__ == "__main__":
     print("Benchmark simulation")
-    print(f'{timeit.timeit(lambda: [i for i in itertools.islice(iter(ThreeBody()),60)], number = 10)}s to create 60 frames of video (averaged over 10 times)')
+    print(f'{timeit.timeit(lambda: [i for i in itertools.islice(iter(ThreeBody()),60)], number = 10)}s to create 60 frames of video 10 times')
     print("Generating video")
     videoRes = (320, 320)
     sim = iter(ThreeBody())
